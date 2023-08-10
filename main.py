@@ -6,55 +6,132 @@ from  colorama import Fore
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys 
+from openpyxl import Workbook
+from openpyxl import load_workbook
+from selenium.common.exceptions import WebDriverException, NoSuchElementException
+
+
+book = Workbook()
+sheet = book.active
+sheet['A1']="Diseño"
+sheet['B1']="Marca"
+sheet['C1']="Referencia"
+sheet['D1']="Precio antes"
+sheet['E1']="Precio despues"
+count=1
+
+
+def Virtual_Llantas(reference_list):
+    reference_temp=""
+    for reference in reference_list:
+        reference_temp=reference
+        reference=reference.replace('/','-')
+        reference=reference.replace('lt','')
+        reference=reference.replace('z','')
+        reference=reference.replace('p','')
+        reference=reference.replace('x','-')
+        
+        url=f"https://www.virtualllantas.com/llantas-{reference}"
+        navegacion(url,reference_temp)
+        
+    #navegacion()
 
 
 
-def buscarLlantasValidas(llantas, lista_llantas):
+def list_tire_brands():
+    i=2
+    list_brands=[]
+    file= load_workbook("tire_brands.xlsx")
+    sheet_list=file.active
+    while True:
+        cell=sheet_list[f'A{i}'].value
+        if cell!=None and not cell.isspace():
+             list_brands.append(cell.lower())
+             i+=1
+        else:
+            break
+    return list_brands
+
+def reference_list():
+    i=2
+    reference_list=[]
+    file= load_workbook("AAAA.xlsx")
+    sheet_list=file.active
+    while True:
+        cell=sheet_list[f'A{i}'].value
+        if cell!=None and not cell.isspace():
+             
+             reference_list.append(cell.lower())
+             i+=1
+        else:
+            break
+    return reference_list
+
+def Save(Detalles_llanta):
+    global count
+    count+=1
+    for save_tire in Detalles_llanta:
+        elementos=save_tire.split(',')
+        count+=1
+        sheet[f'A{count}']=elementos[0]
+        sheet[f'B{count}']=elementos[1]
+        sheet[f'C{count}']=elementos[2]
+        sheet[f'D{count}']=elementos[3]
+        sheet[f'E{count}']=elementos[4]
+        print(count)
+    book.save('prueba2_.xlsx')
+
+def buscarLlantasValidas(llantas, lista_llantas,llantas_encontradas):
     frase_minusculas = llantas.lower()  # Convertir la frase a minúsculas para realizar una búsqueda insensible a mayúsculas y minúsculas
 
     for llanta in lista_llantas:
         palabra_minusculas = llanta.lower()  # Convertir la palabra a minúsculas para la comparación insensible a mayúsculas y minúsculas
 
         if palabra_minusculas in frase_minusculas:
+            llantas_encontradas.append(llanta)
             return True
     return False
 
-def navegacion(url_complemento):
-    url=f"https://www.virtualllantas.com/llantas-{url_complemento}"
-    browser = webdriver.Firefox()
-    browser.get(url)
-    browser.maximize_window()
-    browser.implicitly_wait(2)
-    browser.find_element("xpath",'//*[@id="418535"]').click()
-    browser.implicitly_wait(2)
-    browser.find_element("xpath",'//*[@value="BOGOTA, D.C."]').click()
-    browser.implicitly_wait(2)
-    browser.find_element("xpath",'//*[@class="btn btn-primary btn-ubicacion-guardar"]').click()
-    time.sleep(2)
-
+def infiniteScrollDown(browser):
     iter=1
     while True:
+        time.sleep(0.35)
         scrollHeight = browser.execute_script("return document.body.scrollHeight")
         Height=250*iter
         browser.execute_script("window.scrollTo(0, " + str(Height) + ");")
         if Height > scrollHeight:
             print('End of page')
             break
-        time.sleep(0.25)
         iter+=1
 
+def virtual(browser):
+    browser.find_element("xpath",'//*[@id="418535"]').click()
+    browser.implicitly_wait(1)
+    browser.find_element("xpath",'//*[@value="BOGOTA, D.C."]').click()
+    browser.implicitly_wait(1)
+    browser.find_element("xpath",'//*[@class="btn btn-primary btn-ubicacion-guardar"]').click()
+    time.sleep(2)
+    infiniteScrollDown(browser)
+    
+def navegacion(url,reference):
+    browser = webdriver.Firefox()
+    browser.get(url)
+    browser.maximize_window()
+    browser.implicitly_wait(2)
 
-    #browser.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-    #time.sleep(2)
-    #browser.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-    #browser.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-    #browser.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-    #browser.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-    #time.sleep(2)
+    try:
+        virtual()
+    except NoSuchElementException as e:
+        print("Error Element :"+e)
+    finally:
+        virtual(browser)
+    
 
-    lista_de_llantas_validas=["bridgestone","continental","yokohama","goodyear","nitto","kumho","general","hankook","falken","maxxis","hifly","ovation"]
+    lista_de_llantas_validas=list_tire_brands()
     enlaces=[]
+    llantas_encontradas=[]
     Detalles_llanta=[]
+
 
     html=browser.page_source
 
@@ -65,7 +142,7 @@ def navegacion(url_complemento):
 
 
     for llantas in llantas_repetida:
-        if buscarLlantasValidas(llantas[1],lista_de_llantas_validas):
+        if buscarLlantasValidas(llantas[1],lista_de_llantas_validas,llantas_encontradas):
             enlaces.append(llantas[0])
             Detalles_llanta.append(llantas[1])
 
@@ -84,23 +161,21 @@ def navegacion(url_complemento):
         precio_antes_valor = precio_antes.group(1) if precio_antes else None
         precio_despues_valor = precio_despues.group(1) if precio_despues else None
 
-
-
-        Detalles_llanta[i]+=f",{url_complemento}"
+        
+        Detalles_llanta[i]+=","+llantas_encontradas[i]
+        Detalles_llanta[i]+=f",{reference}"
         Detalles_llanta[i]+=","+str(precio_antes_valor)
         Detalles_llanta[i]+=","+str(precio_despues_valor)
+        
         i=i+1
     print(Detalles_llanta)
+    Save(Detalles_llanta)
 
-anchos=[265]
-perfiles=[70]
-rines=[16]
 
-for ancho in anchos:
-    for perfil in perfiles:
-        for rin in rines:
-            navegacion(f"{ancho}-{perfil}r{rin}")
+#(count,list)
+reference_list=reference_list()
 
+Virtual_Llantas(reference_list)
 
 
 
